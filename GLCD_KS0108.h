@@ -45,7 +45,7 @@ enum Colors {
     Black = BIT_FF
 };
 
-enum Directions {
+enum Orientation {
     Default_Top = BIT_1,
     Right_Top   = BIT_2,
     Bottom_Top  = BIT_4,
@@ -74,11 +74,11 @@ class GLCD_KS0108: public GLCD_Arduino {
         uint8_t dPins[8];
         uint8_t rsPin, rwPin, enPin, c1Pin, c2Pin;
         uint8_t dataPinsSize;
-        uint8_t dispDirection;
+        uint8_t orientationStatus;
         uint8_t Font_Col;
         const void* Font_Family;
 
-        // low level methods
+        // LCD hardware controls members
         void _select_chip(uint8_t chip);
         uint8_t _ram_read_byte(void);
         void _ram_write_command(uint8_t _val);
@@ -89,15 +89,17 @@ class GLCD_KS0108: public GLCD_Arduino {
         void __pulse_enable(void);
         void __delay_ns(void);
 
-        //mid level methods
+        // support members for display draw 
         uint8_t bitsSwaper(uint8_t byte);
         void selectFontFamily(enum FontFamily fontType);
-        void directionFilter(uint8_t* x, uint8_t* y);
+        void adjustOrientation(uint8_t* x, uint8_t* y);
+
+        // display draw controls members
         void draw_char(uint8_t _char);
-        // void draw_line(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
         void draw_corner(uint8_t x, uint8_t y, uint8_t width, uint8_t height, 
             uint8_t radius, uint8_t selector);
 
+        // lcd pins initialize member
         void init(uint8_t DI, uint8_t RW, uint8_t EN, 
             uint8_t D0, uint8_t D1, uint8_t D2, uint8_t D3, uint8_t D4, 
             uint8_t D5, uint8_t D6, uint8_t D7, uint8_t CS1, uint8_t CS2);
@@ -107,12 +109,10 @@ class GLCD_KS0108: public GLCD_Arduino {
         struct Coordinates lcdCoord;
         // struct Virtual_Coordinates virtualCoord;
 
+        // final user level members
         GLCD_KS0108(uint8_t DI, uint8_t RW, uint8_t EN, 
             uint8_t D0, uint8_t D1, uint8_t D2, uint8_t D3, uint8_t D4, 
             uint8_t D5, uint8_t D6, uint8_t D7, uint8_t CS1, uint8_t CS2);
-        
-        // GLCD_KS0108(uint8_t DI, uint8_t RW, uint8_t EN, uint8_t D4, 
-        //     uint8_t D5, uint8_t D6, uint8_t D7, uint8_t CS1, uint8_t CS2);
 
         void begin(enum Colors color);
         void gotoXY(uint8_t x, uint8_t y);
@@ -139,6 +139,6 @@ class GLCD_KS0108: public GLCD_Arduino {
         void drawRoundedRect(uint8_t x, uint8_t y, uint8_t width, uint8_t height, 
             uint8_t radius1, uint8_t radius2, uint8_t radius3, uint8_t radius4);
 
-        GLCD_KS0108& setDispDirection(enum Directions dir);
+        GLCD_KS0108& setOrientation(enum Orientation mode);
 
 };
