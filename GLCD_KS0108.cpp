@@ -30,7 +30,7 @@ void GLCD_KS0108::init(uint8_t DI, uint8_t RW, uint8_t EN,
 	orientationStatus = Default_Top;
 }
 
-void GLCD_KS0108::begin(enum Colors color) {
+void GLCD_KS0108::begin(Colors color) {
     this->virtualCoord.x = 0;
 	this->virtualCoord.y = 0;
 	this->virtualCoord.p = 0;
@@ -44,7 +44,7 @@ void GLCD_KS0108::begin(enum Colors color) {
 
     for(uint8_t i=0; i<dataPinsSize; i++) _pinDefine(dPins[i], OUTPUT);
 
-    _delay_ms(50);						// wait 50ms (millisecond) for LCD to power up
+    _delay_ms(DELAY_MS);				// wait 50ms (millisecond) for LCD to power up
 
     _pinWrite(rsPin, LOW);				// RS or D/I(Data/Instruction) Pin
 	_pinWrite(rwPin, LOW);				// RW(Data Read/Data Write) Pin
@@ -89,7 +89,7 @@ void GLCD_KS0108::clearDisplay(uint8_t color) {
 	}
 }
 
-void GLCD_KS0108::setDisplayColor(enum Colors color) {
+void GLCD_KS0108::setDisplayColor(Colors color) {
 	if(inverter != color) {
 		inverter = color;
 	}
@@ -106,7 +106,7 @@ void GLCD_KS0108::setPixel(uint8_t x, uint8_t y) {
 	_ram_write_data(pixel);
 }
 
-void GLCD_KS0108::printNumber(uint8_t num) {
+void GLCD_KS0108::printCharacter(uint8_t num) {
 	char buffer[10];
 	itoa(num, buffer, 10);
 	printCharacter(buffer);
@@ -118,7 +118,7 @@ void GLCD_KS0108::printCharacter(const char* str) {
 
 uint8_t GLCD_KS0108::read_byte(void) {
 	_ram_read_byte();				// virtual read
-	return _ram_read_byte();		// real read
+	return _ram_read_byte();		// actual read
 }
 
 void GLCD_KS0108::drawHorizontalLine(uint8_t x, uint8_t y, uint8_t width) {
@@ -178,9 +178,13 @@ void GLCD_KS0108::drawCircle(uint8_t x, uint8_t y, uint8_t radius) {
 	drawRoundedRect(x, y, diameter, diameter, radius);
 }
 
-GLCD_KS0108& GLCD_KS0108::setOrientation(enum Orientation mode) {
+GLCD_KS0108& GLCD_KS0108::setOrientation(Orientation mode) {
 	orientationStatus = mode;
 	return *this;
+}
+
+void GLCD_KS0108::selectFontFamily(Font_t fontType) {
+	Font_Family = fontType;
 }
 
 
@@ -193,31 +197,26 @@ uint8_t GLCD_KS0108::bitsSwaper(uint8_t byte) {
 	return byte;
 }
 
-void GLCD_KS0108::selectFontFamily(enum FontFamily fontType) {
-	if(fontType & BIT_1) {
-		Font_Family = VERTICAL_FONT_8X5;
-		Font_Col = FONT_WIDTH;
-	} else if(fontType & BIT_2) {
-		Font_Family = HORIZONTAL_FONT_8X5;
-		Font_Col = FONT_HIGHT;
-	}
+void GLCD_KS0108::fontMeasurement(uint8_t length, uint8_t width) {
+	Font_Length = pgm_read_byte(&Font_Family[length]);
+	Font_Width = pgm_read_byte(&Font_Family[width]);
 }
 
 void GLCD_KS0108::adjustOrientation(uint8_t* x, uint8_t* y) {
 	uint8_t temp = *x;
 
 	if(orientationStatus & BIT_1) {
-		selectFontFamily(V_FONT_8X5);
+		fontMeasurement(BIT_0, BIT_0);
 	} else if(orientationStatus & BIT_2) {
-		selectFontFamily(H_FONT_8X5);
+		fontMeasurement(BIT_1, BIT_0);
 		*x = (DISPLAY_WIDTH-BIT_1)-*y;
 		*y = temp;
 	} else if(orientationStatus & BIT_4) {
-		selectFontFamily(V_FONT_8X5);
+		fontMeasurement(BIT_0, BIT_0);
 		*x = (DISPLAY_WIDTH-BIT_1)-*x;
 		*y = (DISPLAY_HEIGHT-BIT_1)-*y;
 	} else if(orientationStatus & BIT_8) {
-		selectFontFamily(H_FONT_8X5);
+		fontMeasurement(BIT_1, BIT_0);
 		*x = *y;
 		*y = (DISPLAY_HEIGHT-BIT_1)-temp;
 	}
@@ -252,28 +251,33 @@ void GLCD_KS0108::draw_corner(uint8_t x, uint8_t y, uint8_t width, uint8_t heigh
 }
 
 void GLCD_KS0108::draw_char(uint8_t _char) {
-	uint8_t row, pageOffset, rData, fontByte, newFontByte, bounds_width;
+	#define F_SPACE (Font_Width+BIT_1)
+
+	uint8_t pageOffset, rData, fontByte, newFontByte, bounds_width;
+	uint16_t fontStart;
+
 	bool is_vertical_direction = ((orientationStatus & BIT_2) || (orientationStatus & BIT_8));
 	bool is_bottom_or_left_direction = ((orientationStatus & BIT_4) || (orientationStatus & BIT_8));
 
 	// Remove leading empty characters
-	row = _char - FONT_START;				// 32 is the ASCII of the first printable character
+	// 32 is the ASCII of the first printable character
+	fontStart = ((_char-BIT_32)*Font_Length)+((is_vertical_direction)?(BIT_95*Font_Width)+BIT_2:BIT_2);
 
-	for(uint8_t col=0; col<Font_Col; col++) {
+	for(uint8_t index=0; index<Font_Length; index++) {
 		// Find the start of the character in the font array
 		// The first byte of each line is the width/height of the character
-		fontByte = pgm_read_byte(&*(*(((uint8_t (*)[Font_Col])Font_Family) + row) + col));
+		fontByte = pgm_read_byte(&*(Font_Family + (fontStart+index)));
 
 		if(orientationStatus & BIT_2)
-			fontByte = bitsSwaper(fontByte)>>3;
+			fontByte = bitsSwaper(fontByte)>>BIT_3;
 		else if(orientationStatus & BIT_4)
 			fontByte = bitsSwaper(fontByte);
 		else if(orientationStatus & BIT_8)
-			fontByte = fontByte<<3;
+			fontByte = fontByte<<BIT_3;
 
 		// If the character exceeds screen width bounds, start the next line
 		bounds_width = (is_vertical_direction) ? DISPLAY_HEIGHT : DISPLAY_WIDTH;
-		if(lcdCoord.x >= (bounds_width-FONT_WIDTH) && col == 0) gotoXY(0, lcdCoord.y+BIT_8);
+		if(lcdCoord.x >= (bounds_width-Font_Width) && index == BIT_0) gotoXY(0, lcdCoord.y+BIT_8);
 
 		// Read the data from where we will start writing the font
 		rData = read_byte();
@@ -282,14 +286,16 @@ void GLCD_KS0108::draw_char(uint8_t _char) {
 		pageOffset = (is_vertical_direction) ? lcdCoord.x%BIT_8 : lcdCoord.y%BIT_8;
 
 		// Calculate overflowing bits related to page height
-		if(pageOffset != 0) {
+		if(pageOffset != BIT_0) {
 			newFontByte = (is_bottom_or_left_direction) ? fontByte>>pageOffset : fontByte<<pageOffset;
 
 			_ram_write_data(inverter
 				? is_vertical_direction
 					? (orientationStatus & BIT_8)
-						? ~((newFontByte|BIT_FF<<BIT_8-pageOffset)|(newFontByte|BIT_FF>>BIT_6+pageOffset))|rData
-						: ~((newFontByte|BIT_FF>>BIT_8-pageOffset)|(newFontByte|BIT_FF<<BIT_6+pageOffset))|rData
+						? ~((newFontByte|BIT_FF<<BIT_8-pageOffset)
+							| (newFontByte|BIT_FF>>F_SPACE+pageOffset))|rData
+						: ~((newFontByte|BIT_FF>>BIT_8-pageOffset)
+							| (newFontByte|BIT_FF<<F_SPACE+pageOffset))|rData
 					: ~(newFontByte|BIT_FF>>BIT_8-pageOffset)|rData
 				: newFontByte|rData);
 
@@ -305,7 +311,7 @@ void GLCD_KS0108::draw_char(uint8_t _char) {
 				: fontByte>>=(BIT_8-pageOffset);
 
 			(is_vertical_direction)
-				? lcdCoord.x-=(BIT_8 - pageOffset)		// update the x-coordinate for the next line
+				? lcdCoord.x-=(BIT_8-pageOffset)		// update the x-coordinate for the next line
 				: lcdCoord.y-=BIT_8;					// update the y-coordinate for the next line
 		}
 
@@ -313,8 +319,8 @@ void GLCD_KS0108::draw_char(uint8_t _char) {
 		_ram_write_data(inverter
 			? is_vertical_direction
 				? (orientationStatus & BIT_8)
-		 			? ~(fontByte|BIT_FF>>(pageOffset?pageOffset-BIT_2:BIT_6))|rData
-		 			: ~(fontByte|BIT_FF<<(pageOffset?pageOffset-BIT_2:BIT_6))|rData
+		 			? ~(fontByte|BIT_FF>>(pageOffset?pageOffset-(BIT_8-F_SPACE):F_SPACE))|rData
+		 			: ~(fontByte|BIT_FF<<(pageOffset?pageOffset-(BIT_8-F_SPACE):F_SPACE))|rData
 				: ~(fontByte|BIT_FF<<(pageOffset?pageOffset:BIT_8))|rData
 			: fontByte|rData);
 
@@ -326,15 +332,15 @@ void GLCD_KS0108::draw_char(uint8_t _char) {
 	}
 
 	if(is_vertical_direction) {
-		// lcdCoord.y-=BIT_8;					// reset the y-coordinate for the next font bits
-		gotoXY(lcdCoord.x+BIT_6, lcdCoord.y-BIT_8);
-		// lcdCoord.x+=BIT_6;					// update the x-coordinate for the next character
+		// update the x-coordinate for the next character
+		// reset the y-coordinate for the next font bits
+		gotoXY(lcdCoord.x+F_SPACE, lcdCoord.y-Font_Length);
 	} else {
 		// If inverter is BLACK then fill the space between two characters
 		rData = read_byte();
 		_ram_write_data((inverter<<pageOffset) | rData);
 
-		if(pageOffset != 0) {
+		if(pageOffset != BIT_0) {
 			gotoXY(lcdCoord.x, lcdCoord.y+BIT_8);
 			rData = read_byte();
 			_ram_write_data((inverter>>(BIT_8-pageOffset)) | rData);
@@ -372,7 +378,6 @@ uint8_t GLCD_KS0108::_ram_read_byte(void) {
 
 	_pinWrite(enPin, HIGH);
 	__delay_ns();
-	// rData |= ((PINB&0x0F)<<4 | (PIND&0xF0)>>4);
 	for(uint8_t i=0; i<dataPinsSize; i++) rData |= (_pinRead(dPins[i]) & BIT_1) << i;
 	_pinWrite(enPin, LOW);
 	__delay_ns();

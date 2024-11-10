@@ -1,11 +1,13 @@
 #pragma once
 
+#include <inttypes.h>
 #include "Arduino.h"
-#include "./fonts/FONT_8x5.h"
 
 #define DISPLAY_WIDTH	128
 #define DISPLAY_HEIGHT	64
 #define CHIP_WIDTH      64
+
+#define DELAY_MS 50
 
 #define LCD_ON		0x3F
 #define LCD_OFF		0x3E
@@ -23,6 +25,8 @@
 #define BIT_7   0x07
 #define BIT_8   0x08
 #define BIT_15  0x0F
+#define BIT_32  0x20
+#define BIT_95  0x5F
 #define BIT_FF  0xFF
 
 struct Virtual_Coordinates {
@@ -52,10 +56,7 @@ enum Orientation {
     Left_Top    = BIT_8
 };
 
-enum FontFamily {
-    V_FONT_8X5 = BIT_1,
-    H_FONT_8X5 = BIT_2
-};
+typedef const uint8_t* Font_t;
 
 class GLCD_Arduino {
     private:
@@ -75,8 +76,9 @@ class GLCD_KS0108: public GLCD_Arduino {
         uint8_t rsPin, rwPin, enPin, c1Pin, c2Pin;
         uint8_t dataPinsSize;
         uint8_t orientationStatus;
-        uint8_t Font_Col;
-        const void* Font_Family;
+        uint8_t Font_Length;
+        uint8_t Font_Width;
+        Font_t Font_Family;
 
         // LCD hardware controls members
         void _select_chip(uint8_t chip);
@@ -91,7 +93,7 @@ class GLCD_KS0108: public GLCD_Arduino {
 
         // support members for display draw 
         uint8_t bitsSwaper(uint8_t byte);
-        void selectFontFamily(enum FontFamily fontType);
+        void fontMeasurement(uint8_t lIndex, uint8_t wIndex);
         void adjustOrientation(uint8_t* x, uint8_t* y);
 
         // display draw controls members
@@ -114,12 +116,12 @@ class GLCD_KS0108: public GLCD_Arduino {
             uint8_t D0, uint8_t D1, uint8_t D2, uint8_t D3, uint8_t D4, 
             uint8_t D5, uint8_t D6, uint8_t D7, uint8_t CS1, uint8_t CS2);
 
-        void begin(enum Colors color);
+        void begin(Colors color);
         void gotoXY(uint8_t x, uint8_t y);
         void clearDisplay(uint8_t color);
-        void setDisplayColor(enum Colors color);
+        void setDisplayColor(Colors color);
         void setPixel(uint8_t x, uint8_t y);
-        void printNumber(uint8_t num);
+        void printCharacter(uint8_t num);
         void printCharacter(const char* str);
         uint8_t read_byte(void);
         void drawHorizontalLine(uint8_t x, uint8_t y, uint8_t length);
@@ -139,6 +141,7 @@ class GLCD_KS0108: public GLCD_Arduino {
         void drawRoundedRect(uint8_t x, uint8_t y, uint8_t width, uint8_t height, 
             uint8_t radius1, uint8_t radius2, uint8_t radius3, uint8_t radius4);
 
-        GLCD_KS0108& setOrientation(enum Orientation mode);
+        GLCD_KS0108& setOrientation(Orientation mode);
+        void selectFontFamily(Font_t fontType);
 
 };
